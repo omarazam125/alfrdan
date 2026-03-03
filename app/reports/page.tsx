@@ -22,10 +22,32 @@ interface CallReport {
   language: string
   generatedAt: string
   analysis?: {
-    overallScore: number
-    customerCooperation: { score: number; description: string }
-    engagement: { score: number; description: string }
+    overallScore?: number
+    customerOverallScore?: number
+    customerMood?: string
+    overallScores?: {
+      customerSatisfaction?: number
+      serviceQuality?: number
+      agentPerformance?: number
+      customerCooperation?: number
+      callSuccess?: number
+    }
+    satisfactionMetrics?: {
+      overallSatisfaction?: number
+    }
+    customerCooperation?: { score: number; description: string }
+    engagement?: { score: number; description: string }
   }
+}
+
+// Helper function to extract score from various possible locations
+const getOverallScore = (analysis: CallReport["analysis"]): number | undefined => {
+  if (!analysis) return undefined
+  return analysis.overallScore 
+    || analysis.customerOverallScore
+    || analysis.overallScores?.customerSatisfaction
+    || analysis.overallScores?.callSuccess
+    || analysis.satisfactionMetrics?.overallSatisfaction
 }
 
 export default function ReportsPage() {
@@ -185,9 +207,9 @@ export default function ReportsPage() {
                       </div>
                     </Link>
                     <div className="flex items-center gap-4">
-                      {report.analysis?.overallScore && (
+                      {getOverallScore(report.analysis) && (
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-primary">{report.analysis.overallScore}/10</div>
+                          <div className="text-2xl font-bold text-primary">{getOverallScore(report.analysis)}/10</div>
                           <div className="text-xs text-muted-foreground">Overall Score</div>
                         </div>
                       )}

@@ -47,12 +47,20 @@ interface CallReport {
   notes: string
 }
 
-const CUSTOMER_MOODS = {
-  happy: { label: "Happy", color: "bg-green-500/20 text-green-600 border-green-500/30" },
-  satisfied: { label: "Satisfied", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
-  neutral: { label: "Neutral", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
-  frustrated: { label: "Frustrated", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
-  angry: { label: "Angry", color: "bg-red-500/20 text-red-600 border-red-500/30" },
+const CUSTOMER_MOODS: Record<string, { label: string; color: string }> = {
+  // English keys
+  happy: { label: "سعيد", color: "bg-green-500/20 text-green-600 border-green-500/30" },
+  satisfied: { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  neutral: { label: "محايد", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
+  frustrated: { label: "محبط", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
+  angry: { label: "غاضب", color: "bg-red-500/20 text-red-600 border-red-500/30" },
+  // Arabic keys (from API response)
+  "سعيد": { label: "سعيد", color: "bg-green-500/20 text-green-600 border-green-500/30" },
+  "راضٍ": { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  "راض": { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  "محايد": { label: "محايد", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
+  "محبط": { label: "محبط", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
+  "غاضب": { label: "غاضب", color: "bg-red-500/20 text-red-600 border-red-500/30" },
 }
 
 export default function CustomerRecordsPage() {
@@ -165,6 +173,15 @@ export default function CustomerRecordsPage() {
             const reportExists = !!(savedReport || localReport)
             const reportData = savedReport || localReport
 
+            // Extract score from multiple possible locations
+            const extractScore = (data: any) => {
+              if (!data?.analysis) return undefined
+              return data.analysis.customerOverallScore 
+                || data.analysis.overallScores?.customerSatisfaction
+                || data.analysis.overallScores?.callSuccess
+                || data.analysis.satisfactionMetrics?.overallSatisfaction
+            }
+
             return {
               id: job.id,
               customerName: customerNameFromMemory,
@@ -175,7 +192,7 @@ export default function CustomerRecordsPage() {
               status: callStatus,
               type: "outbound",
               hasReport: reportExists,
-              score: reportData?.analysis?.customerOverallScore,
+              score: extractScore(reportData),
               mood: reportData?.analysis?.customerMood,
               notes: reportData?.notes || "",
             }
@@ -183,6 +200,14 @@ export default function CustomerRecordsPage() {
           .filter((record) => record !== null)
 
         // Merge with saved reports from local storage
+        const extractScoreFromReport = (report: any) => {
+          if (!report?.analysis) return undefined
+          return report.analysis.customerOverallScore 
+            || report.analysis.overallScores?.customerSatisfaction
+            || report.analysis.overallScores?.callSuccess
+            || report.analysis.satisfactionMetrics?.overallSatisfaction
+        }
+
         const localReports = savedReports
           .filter((report: any) => !transformedRecords.find((r) => r.id === report.id))
           .map((report: any) => ({
@@ -195,7 +220,7 @@ export default function CustomerRecordsPage() {
             status: "completed",
             type: "outbound",
             hasReport: true,
-            score: report.analysis?.customerOverallScore,
+            score: extractScoreFromReport(report),
             mood: report.analysis?.customerMood,
             notes: report.notes || "",
           }))
@@ -333,9 +358,18 @@ export default function CustomerRecordsPage() {
         localStorage.setItem("call-reports", JSON.stringify(updatedReports))
         console.log("[v0] Report saved to local storage successfully")
 
+        // Extract score from multiple possible locations in the analysis
+        const extractedScore = completeReport.analysis?.customerOverallScore 
+          || completeReport.analysis?.overallScores?.customerSatisfaction
+          || completeReport.analysis?.overallScores?.callSuccess
+          || completeReport.analysis?.satisfactionMetrics?.overallSatisfaction
+          || 5
+
         const moodFromAnalysis =
           completeReport.analysis?.customerMood ||
-          determineMoodFromScore(completeReport.analysis?.customerOverallScore || 5)
+          determineMoodFromScore(extractedScore)
+
+        console.log("[v0] Extracted score:", extractedScore, "Mood:", moodFromAnalysis)
 
         setRecords((current) =>
           current.map((r) =>
@@ -347,7 +381,7 @@ export default function CustomerRecordsPage() {
                   duration: completeReport.duration,
                   status: "completed",
                   hasReport: true,
-                  score: completeReport.analysis?.customerOverallScore,
+                  score: extractedScore,
                   mood: moodFromAnalysis,
                 }
               : r,
@@ -369,11 +403,12 @@ export default function CustomerRecordsPage() {
   }
 
   const determineMoodFromScore = (score: number): string => {
-    if (score >= 9) return "happy"
-    if (score >= 7) return "satisfied"
-    if (score >= 5) return "neutral"
-    if (score >= 3) return "frustrated"
-    return "angry"
+    // Return Arabic mood values to match API response
+    if (score >= 9) return "سعيد"
+    if (score >= 7) return "راضٍ"
+    if (score >= 5) return "محايد"
+    if (score >= 3) return "محبط"
+    return "غاضب"
   }
 
   const handleNotesUpdate = (callId: string, notes: string) => {
@@ -578,12 +613,12 @@ export default function CustomerRecordsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {record.mood && record.hasReport && CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS] ? (
+                          {record.mood && record.hasReport ? (
                             <Badge
                               variant="outline"
-                              className={CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS]?.color || "bg-gray-500/20 text-gray-600 border-gray-500/30"}
+                              className={CUSTOMER_MOODS[record.mood]?.color || "bg-gray-500/20 text-gray-600 border-gray-500/30"}
                             >
-                              {CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS]?.label || record.mood}
+                              {CUSTOMER_MOODS[record.mood]?.label || record.mood}
                             </Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>

@@ -117,19 +117,26 @@ export default function ReportDetailPage() {
 
   const getMoodColor = (mood: string) => {
     const m = mood?.toLowerCase() || ""
-    if (m.includes("happy") || m.includes("satisfied")) return "text-[#059669]"
-    if (m.includes("neutral")) return "text-[#d97706]"
+    // Support both English and Arabic mood values
+    if (m.includes("happy") || m.includes("satisfied") || m.includes("سعيد") || m.includes("راض")) return "text-[#059669]"
+    if (m.includes("neutral") || m.includes("محايد")) return "text-[#d97706]"
     return "text-[#dc2626]"
   }
 
   const getMoodLabel = (mood: string) => {
-    const m = mood?.toLowerCase() || ""
-    if (m.includes("happy")) return "Happy"
-    if (m.includes("satisfied")) return "Satisfied"
-    if (m.includes("neutral")) return "Neutral"
-    if (m.includes("frustrated")) return "Frustrated"
-    if (m.includes("angry")) return "Angry"
-    return mood || "Unknown"
+    if (!mood) return "Unknown"
+    const m = mood.toLowerCase()
+    // English moods
+    if (m.includes("happy")) return "سعيد"
+    if (m.includes("satisfied")) return "راضٍ"
+    if (m.includes("neutral")) return "محايد"
+    if (m.includes("frustrated")) return "محبط"
+    if (m.includes("angry")) return "غاضب"
+    // Arabic moods - return as-is
+    if (m.includes("سعيد") || m.includes("راض") || m.includes("محايد") || m.includes("محبط") || m.includes("غاضب")) {
+      return mood
+    }
+    return mood
   }
 
   const getStatusBadge = (status: string) => {
@@ -143,8 +150,16 @@ export default function ReportDetailPage() {
 
   // Derived data for charts
   const analysis = report?.analysis
-  const overallScore = analysis?.overallScores?.patientSatisfaction ?? analysis?.customerOverallScore ?? 0
-  const cooperationScore = analysis?.patientCooperation?.score ?? analysis?.customerBehavior?.score ?? 0
+  const overallScore = analysis?.overallScores?.customerSatisfaction 
+    ?? analysis?.overallScores?.patientSatisfaction 
+    ?? analysis?.customerOverallScore 
+    ?? analysis?.satisfactionMetrics?.overallSatisfaction
+    ?? 0
+  const cooperationScore = analysis?.customerCooperation?.score 
+    ?? analysis?.patientCooperation?.score 
+    ?? analysis?.overallScores?.customerCooperation
+    ?? analysis?.customerBehavior?.score 
+    ?? 0
   const agentScore = analysis?.overallScores?.agentPerformance ?? 0
   const serviceScore = analysis?.overallScores?.serviceQuality ?? 0
   const callSuccessScore = analysis?.overallScores?.callSuccess ?? 0
