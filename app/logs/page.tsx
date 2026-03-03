@@ -48,19 +48,19 @@ interface CallReport {
 }
 
 const CUSTOMER_MOODS: Record<string, { label: string; color: string }> = {
-  // English keys
-  happy: { label: "سعيد", color: "bg-green-500/20 text-green-600 border-green-500/30" },
-  satisfied: { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
-  neutral: { label: "محايد", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
-  frustrated: { label: "محبط", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
-  angry: { label: "غاضب", color: "bg-red-500/20 text-red-600 border-red-500/30" },
-  // Arabic keys (from API response)
-  "سعيد": { label: "سعيد", color: "bg-green-500/20 text-green-600 border-green-500/30" },
-  "راضٍ": { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
-  "راض": { label: "راضٍ", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
-  "محايد": { label: "محايد", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
-  "محبط": { label: "محبط", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
-  "غاضب": { label: "غاضب", color: "bg-red-500/20 text-red-600 border-red-500/30" },
+  // English keys (primary)
+  happy: { label: "Happy", color: "bg-green-500/20 text-green-600 border-green-500/30" },
+  satisfied: { label: "Satisfied", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  neutral: { label: "Neutral", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
+  frustrated: { label: "Frustrated", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
+  angry: { label: "Angry", color: "bg-red-500/20 text-red-600 border-red-500/30" },
+  // Arabic keys (map to English labels)
+  "سعيد": { label: "Happy", color: "bg-green-500/20 text-green-600 border-green-500/30" },
+  "راضٍ": { label: "Satisfied", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  "راض": { label: "Satisfied", color: "bg-blue-500/20 text-blue-600 border-blue-500/30" },
+  "محايد": { label: "Neutral", color: "bg-gray-500/20 text-gray-600 border-gray-500/30" },
+  "محبط": { label: "Frustrated", color: "bg-orange-500/20 text-orange-600 border-orange-500/30" },
+  "غاضب": { label: "Angry", color: "bg-red-500/20 text-red-600 border-red-500/30" },
 }
 
 export default function CustomerRecordsPage() {
@@ -403,12 +403,12 @@ export default function CustomerRecordsPage() {
   }
 
   const determineMoodFromScore = (score: number): string => {
-    // Return Arabic mood values to match API response
-    if (score >= 9) return "سعيد"
-    if (score >= 7) return "راضٍ"
-    if (score >= 5) return "محايد"
-    if (score >= 3) return "محبط"
-    return "غاضب"
+    // Return English mood values
+    if (score >= 9) return "Happy"
+    if (score >= 7) return "Satisfied"
+    if (score >= 5) return "Neutral"
+    if (score >= 3) return "Frustrated"
+    return "Angry"
   }
 
   const handleNotesUpdate = (callId: string, notes: string) => {

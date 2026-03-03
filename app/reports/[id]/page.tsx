@@ -28,6 +28,12 @@ import {
   Award,
   ThumbsUp,
   BarChart3,
+  Car,
+  MapPin,
+  Wrench,
+  CreditCard,
+  Package,
+  ClipboardList,
 } from "lucide-react"
 import {
   Radar,
@@ -126,16 +132,12 @@ export default function ReportDetailPage() {
   const getMoodLabel = (mood: string) => {
     if (!mood) return "Unknown"
     const m = mood.toLowerCase()
-    // English moods
-    if (m.includes("happy")) return "سعيد"
-    if (m.includes("satisfied")) return "راضٍ"
-    if (m.includes("neutral")) return "محايد"
-    if (m.includes("frustrated")) return "محبط"
-    if (m.includes("angry")) return "غاضب"
-    // Arabic moods - return as-is
-    if (m.includes("سعيد") || m.includes("راض") || m.includes("محايد") || m.includes("محبط") || m.includes("غاضب")) {
-      return mood
-    }
+    // Return English labels
+    if (m.includes("happy") || m.includes("سعيد")) return "Happy"
+    if (m.includes("satisfied") || m.includes("راض")) return "Satisfied"
+    if (m.includes("neutral") || m.includes("محايد")) return "Neutral"
+    if (m.includes("frustrated") || m.includes("محبط")) return "Frustrated"
+    if (m.includes("angry") || m.includes("غاضب")) return "Angry"
     return mood
   }
 
@@ -321,6 +323,163 @@ export default function ReportDetailPage() {
 
           {analysis ? (
             <>
+              {/* Order Details Section */}
+              {analysis.orderDetails && (
+                <Card className="p-6 border-2 border-primary/20">
+                  <div className="flex items-center gap-2 mb-6">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    <h2 className="text-lg font-bold">Order Details</h2>
+                    <Badge variant="outline" className="ml-auto">Service Request</Badge>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Customer Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <User className="w-4 h-4" /> Customer Information
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Name</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.customerName || patientName || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Phone</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.phoneNumber || report.phoneNumber || "Not mentioned"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Vehicle Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <Car className="w-4 h-4" /> Vehicle Information
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">License Plate</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.licensePlate || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Vehicle</span>
+                          <span className="text-sm font-medium">
+                            {analysis.orderDetails.vehicleInfo?.type || analysis.vehicleType || "Not mentioned"}
+                            {analysis.orderDetails.vehicleInfo?.model && ` - ${analysis.orderDetails.vehicleInfo.model}`}
+                            {analysis.orderDetails.vehicleInfo?.year && ` (${analysis.orderDetails.vehicleInfo.year})`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Mileage</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.mileage || "Not mentioned"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Service Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <Wrench className="w-4 h-4" /> Service Details
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Main Reason</span>
+                          <span className="text-sm font-medium text-right max-w-[180px]">{analysis.orderDetails.mainServiceReason || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Branch</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.selectedBranch || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Consultant</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.preferredConsultant || "Not specified"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Appointment Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <Calendar className="w-4 h-4" /> Appointment
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Date</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.selectedAppointment?.date || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Time</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.selectedAppointment?.time || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Est. Duration</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.estimatedDuration || "Not mentioned"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Transport & Location */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <MapPin className="w-4 h-4" /> Transport Option
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Option</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.transportOption || "Not mentioned"}</span>
+                        </div>
+                        {analysis.orderDetails.address && analysis.orderDetails.address !== "غير مطلوب" && (
+                          <div className="flex justify-between items-center py-2 border-b border-border/50">
+                            <span className="text-sm text-muted-foreground">Address</span>
+                            <span className="text-sm font-medium text-right max-w-[180px]">{analysis.orderDetails.address}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cost & Package */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" /> Cost & Package
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Est. Cost</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.estimatedCost || "Not mentioned"}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-border/50">
+                          <span className="text-sm text-muted-foreground">Service Package</span>
+                          <span className="text-sm font-medium">{analysis.orderDetails.hasServicePackage || "Not mentioned"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Additional Requests */}
+                  {analysis.orderDetails.additionalRequests && analysis.orderDetails.additionalRequests.length > 0 && (
+                    <div className="mt-6 pt-4 border-t border-border">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2 mb-3">
+                        <Package className="w-4 h-4" /> Additional Requests
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.orderDetails.additionalRequests.map((request: string, index: number) => (
+                          <Badge key={index} variant="secondary" className="text-xs">{request}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Special Notes */}
+                  {analysis.orderDetails.specialNotes && analysis.orderDetails.specialNotes !== "لا توجد" && (
+                    <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                        <FileText className="w-4 h-4" /> Special Notes
+                      </h3>
+                      <p className="text-sm text-muted-foreground">{analysis.orderDetails.specialNotes}</p>
+                    </div>
+                  )}
+                </Card>
+              )}
+
               {/* Score Cards Row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className={`p-5 border-2 ${getScoreBg(overallScore)}`}>
