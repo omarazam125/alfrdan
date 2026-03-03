@@ -578,12 +578,12 @@ export default function CustomerRecordsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {record.mood && record.hasReport ? (
+                          {record.mood && record.hasReport && CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS] ? (
                             <Badge
                               variant="outline"
-                              className={CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS].color}
+                              className={CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS]?.color || "bg-gray-500/20 text-gray-600 border-gray-500/30"}
                             >
-                              {CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS].label}
+                              {CUSTOMER_MOODS[record.mood as keyof typeof CUSTOMER_MOODS]?.label || record.mood}
                             </Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
