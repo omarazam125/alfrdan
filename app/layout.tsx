@@ -6,9 +6,9 @@ import "./globals.css"
 import { LayoutContent } from "@/components/layout-content"
 
 export const metadata: Metadata = {
-  title: "Al-Furdan - Service Center Dashboard",
+  title: "Alfardan - Service Center Dashboard",
   description:
-    "AI-powered service appointment management dashboard for Al-Furdan automotive service center",
+    "AI-powered service appointment management dashboard for Alfardan automotive service center",
   generator: "v0.app",
 }
 

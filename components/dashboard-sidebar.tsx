@@ -26,7 +26,7 @@ export function DashboardSidebar() {
         <div className="flex flex-col items-center">
           <Image
             src="/images/alfurdan-logo.png"
-            alt="Al-Furdan"
+            alt="Alfardan"
             width={120}
             height={120}
             className="object-contain"
@@ -59,7 +59,7 @@ export function DashboardSidebar() {
         <div className="rounded-lg bg-card p-3">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-success animate-pulse" />
-            <span className="font-sans text-xs font-medium text-card-foreground">Al-Furdan AI Agent Active</span>
+            <span className="font-sans text-xs font-medium text-card-foreground">Alfardan AI Agent Active</span>
           </div>
           <p className="mt-1 font-sans text-xs text-muted-foreground">System Connected</p>
         </div>

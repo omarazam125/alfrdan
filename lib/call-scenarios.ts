@@ -30,7 +30,7 @@ export const ALMOAYYED_SCENARIOS: CallScenario[] = [
     name: "حجز موعد خدمة",
     nameEn: "Service Appointment Booking",
     description: "حجز موعد صيانة للمركبة في مركز خدمة الفردان",
-    descriptionEn: "Book a vehicle service appointment at Al-Furdan service center",
+    descriptionEn: "Book a vehicle service appointment at Alfardan service center",
     icon: "🚗",
     agentId: "ac90bc4a-7e12-43c0-8009-9d462d15896c",
     fields: [

@@ -134,7 +134,7 @@ export default function SchedulingPage() {
           <div>
             <h1 className="font-sans text-3xl font-bold text-foreground">Call Scheduling</h1>
             <p className="mt-1 font-sans text-sm text-muted-foreground">
-              Schedule and manage call appointments with Al-Furdan customers
+              Schedule and manage call appointments with Alfardan customers
             </p>
           </div>
           <Button onClick={() => setShowForm(!showForm)} className="gap-2">

@@ -70,7 +70,7 @@ export function HamsaConnectionStatus() {
                 {status.isLoading
                   ? "Connecting to HHC system..."
                   : status.isConnected
-                    ? "Connected to HHC AI Cloud"
+                    ? "Connected to Shaffra AI Cloud"
                     : "Connection Failed"}
               </p>
               {status.error && (

@@ -257,14 +257,14 @@ export default function ReportDetailPage() {
               <ArrowLeft className="w-4 h-4" />
               Back to Call Records
             </Button>
-            <Badge variant="outline" className="text-xs">Al-Furdan Report</Badge>
+            <Badge variant="outline" className="text-xs">Alfardan Report</Badge>
           </div>
 
           {/* Report Header */}
           <Card className="p-6">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h1 className="text-2xl font-bold mb-1 text-foreground">Al-Furdan Call Analysis Report</h1>
+                <h1 className="text-2xl font-bold mb-1 text-foreground">Alfardan Call Analysis Report</h1>
                 <p className="text-sm text-muted-foreground">
                   Comprehensive analysis of customer interaction and service quality
                 </p>
