@@ -160,9 +160,9 @@ export default function AnalyticsPage() {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="font-sans text-3xl font-bold text-foreground">Al-Furdan Service Analytics</h1>
+            <h1 className="font-sans text-3xl font-bold text-foreground">Alfardan Service Analytics</h1>
             <p className="mt-1 font-sans text-sm text-muted-foreground">
-              Comprehensive insights and performance metrics for Al-Furdan service center operations
+              Comprehensive insights and performance metrics for Alfardan service center operations
             </p>
           </div>
           <Select defaultValue="7days">

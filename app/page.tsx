@@ -60,9 +60,9 @@ export default function DashboardPage() {
       <DashboardHeader />
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mb-6">
-          <h1 className="font-sans text-3xl font-bold text-foreground">Al-Furdan Service Dashboard</h1>
+          <h1 className="font-sans text-3xl font-bold text-foreground">Alfardan Service Dashboard</h1>
           <p className="mt-1 font-sans text-sm text-muted-foreground">
-            Real-time insights from Al-Furdan automotive service center
+            Real-time insights from Alfardan automotive service center
           </p>
         </div>
 

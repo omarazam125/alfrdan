@@ -45,7 +45,7 @@ export function DashboardHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Al-Furdan Admin</DropdownMenuLabel>
+            <DropdownMenuLabel>Alfardan Admin</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
