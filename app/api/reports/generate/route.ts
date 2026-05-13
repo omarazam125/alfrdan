@@ -20,9 +20,15 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Hamsa call data fetched successfully")
       console.log("[v0] Call data keys:", Object.keys(callData))
       console.log("[v0] Full call data structure:", JSON.stringify(callData, null, 2).substring(0, 2000))
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Failed to fetch Hamsa call details:", error)
-      return NextResponse.json({ error: "Failed to fetch call details from Hamsa" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to fetch call details from Hamsa",
+          details: error?.message || String(error),
+        },
+        { status: 500 },
+      )
     }
 
     let phoneNumber = "غير متوفر"
@@ -151,23 +157,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "No valid transcript available for this call",
+          details:
+            "The call may not have a transcript yet (still processing) or was too short. Please wait a moment after the call ends and try again.",
         },
         { status: 400 },
       )
     }
 
-    console.log("[v0] Generating AI analysis with OpenAI...")
+    console.log("[v0] Generating AI analysis...")
     const openaiApiKey = process.env.OPENAI_API_KEY
+    const geminiApiKey = process.env.GEMINI_API_KEY
 
-    if (!openaiApiKey) {
-      console.error("[v0] OPENAI_API_KEY environment variable is not set")
+    if (!openaiApiKey && !geminiApiKey) {
+      console.error("[v0] No AI API key configured (OPENAI_API_KEY or GEMINI_API_KEY)")
       return NextResponse.json(
-        { error: "OpenAI API key is not configured. Please add OPENAI_API_KEY to environment variables." },
+        { error: "No AI API key is configured. Please add OPENAI_API_KEY or GEMINI_API_KEY to environment variables." },
         { status: 500 },
       )
     }
 
-    const analysisPrompt = `⚠️ مهم جداً: يجب أن تكون جميع المخرجات باللغة العربية فقط - ما عدا customerMood يجب أن يكون بالإنجليزية ⚠️
+    const analysisPrompt = `مهم جداً: يجب أن تكون جميع المخرجات باللغة العربية فقط - ما عدا customerMood يجب أن يكون بالإنجليزية
 
 قم بتحليل نص المكالمة هذا من مركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center):
 
@@ -344,47 +353,123 @@ ${transcript}
   }
 }`
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "أنت محلل متخصص في خدمة العملاء تقوم بتقييم تفاعلات العملاء وجودة الخدمة لمركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center). قدم تحليلاً شاملاً ومتعدد الأبعاد يغطي رضا العميل، جودة الخدمة، أداء الوكيل، وتعاون العميل. يجب أن تكون جميع الردود باللغة العربية وبتنسيق JSON مع رؤى تفصيلية.",
-          },
-          {
-            role: "user",
-            content: analysisPrompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 8192,
-        response_format: { type: "json_object" },
-      }),
-    })
+    const systemPrompt =
+      "أنت محلل متخصص في خدمة العملاء تقوم بتقييم تفاعلات العملاء وجودة الخدمة لمركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center). قدم تحليلاً شاملاً ومتعدد الأبعاد يغطي رضا العميل، جودة الخدمة، أداء الوكيل، وتعاون العميل. يجب أن تكون جميع الردود باللغة العربية وبتنسيق JSON مع رؤى تفصيلية."
 
-    if (!openaiResponse.ok) {
-      console.error("[v0] OpenAI API error:", openaiResponse.status)
-      const errorText = await openaiResponse.text()
-      console.error("[v0] Error details:", errorText)
-      return NextResponse.json({ error: "Failed to generate analysis" }, { status: openaiResponse.status })
+    let analysisText = ""
+    let aiProvider = ""
+    const aiErrors: string[] = []
+
+    // Try OpenAI first if available
+    if (openaiApiKey) {
+      try {
+        console.log("[v0] Trying OpenAI gpt-4o-mini...")
+        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: analysisPrompt },
+            ],
+            temperature: 0.7,
+            max_tokens: 8192,
+            response_format: { type: "json_object" },
+          }),
+        })
+
+        if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text()
+          const errMsg = `OpenAI API error ${openaiResponse.status}: ${errorText.substring(0, 300)}`
+          console.error("[v0]", errMsg)
+          aiErrors.push(errMsg)
+        } else {
+          const openaiData = await openaiResponse.json()
+          analysisText = openaiData.choices?.[0]?.message?.content || ""
+          aiProvider = "OpenAI"
+          console.log("[v0] OpenAI response received, length:", analysisText.length)
+        }
+      } catch (err: any) {
+        const errMsg = `OpenAI request threw: ${err?.message || String(err)}`
+        console.error("[v0]", errMsg)
+        aiErrors.push(errMsg)
+      }
     }
 
-    const openaiData = await openaiResponse.json()
-    const analysisText = openaiData.choices?.[0]?.message?.content || ""
+    // Fallback to Gemini if OpenAI failed or wasn't configured
+    if (!analysisText && geminiApiKey) {
+      try {
+        console.log("[v0] Falling back to Gemini...")
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: `${systemPrompt}\n\n${analysisPrompt}` }],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 8192,
+                responseMimeType: "application/json",
+              },
+            }),
+          },
+        )
 
-    console.log("[v0] OpenAI response received, length:", analysisText.length)
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text()
+          const errMsg = `Gemini API error ${geminiResponse.status}: ${errorText.substring(0, 300)}`
+          console.error("[v0]", errMsg)
+          aiErrors.push(errMsg)
+        } else {
+          const geminiData = await geminiResponse.json()
+          analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ""
+          aiProvider = "Gemini"
+          console.log("[v0] Gemini response received, length:", analysisText.length)
+        }
+      } catch (err: any) {
+        const errMsg = `Gemini request threw: ${err?.message || String(err)}`
+        console.error("[v0]", errMsg)
+        aiErrors.push(errMsg)
+      }
+    }
+
+    if (!analysisText) {
+      console.error("[v0] All AI providers failed:", aiErrors)
+      return NextResponse.json(
+        {
+          error: "AI analysis failed",
+          details: aiErrors.join(" | "),
+        },
+        { status: 502 },
+      )
+    }
+
+    console.log("[v0] AI provider used:", aiProvider)
     console.log("[v0] Response preview:", analysisText.substring(0, 500))
 
     let analysis
     try {
-      analysis = JSON.parse(analysisText)
+      // Strip code fences if any (Gemini sometimes wraps JSON in ```json ... ```)
+      let cleanText = analysisText.trim()
+      if (cleanText.startsWith("```")) {
+        cleanText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim()
+      }
+      // If still not pure JSON, try to extract the first {...} block
+      if (!cleanText.startsWith("{")) {
+        const match = cleanText.match(/\{[\s\S]*\}/)
+        if (match) cleanText = match[0]
+      }
+      analysis = JSON.parse(cleanText)
       console.log("[v0] Analysis parsed successfully")
 
       // Handle both old format (customerAssessmentQuestions) and new format (detailedAssessmentQuestions)
@@ -402,7 +487,7 @@ ${transcript}
           {
             question: "التحقق من هوية العميل",
             answer: "تم التحقق من هوية العميل بشكل صحيح وفقاً للبروتوكولات",
-            status: "��متاز",
+            status: "ممتاز",
             details: "تم إكمال جميع خطوات التحقق المطلوبة"
           },
           {
@@ -536,8 +621,14 @@ ${transcript}
     console.log("[v0] Final report duration:", duration)
 
     return NextResponse.json(report)
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error generating report:", error)
-    return NextResponse.json({ error: "Failed to generate report" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to generate report",
+        details: error?.message || String(error),
+      },
+      { status: 500 },
+    )
   }
 }
