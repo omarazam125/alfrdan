@@ -155,24 +155,63 @@ export async function POST(request: NextRequest) {
     if (!transcript || transcript.length < 10) {
       console.log("[v0] No transcript found, attempting to transcribe from audio recording...")
       
-      // Get recording URL
+      // Debug: Log the entire callData structure to find where URL is
+      console.log("[v0] Full callData for debugging:", JSON.stringify(callData, null, 2))
+      
+      // Debug: Log all available data to find the recording URL
+      console.log("[v0] Searching for recording URL in callData...")
+      console.log("[v0] callData.url:", callData.url)
+      console.log("[v0] callData.data?.url:", callData.data?.url)
+      console.log("[v0] callData.recordingUrl:", callData.recordingUrl)
+      console.log("[v0] callData.data?.recordingUrl:", callData.data?.recordingUrl)
+      console.log("[v0] callData.mediaUrl:", callData.mediaUrl)
+      console.log("[v0] callData.data?.mediaUrl:", callData.data?.mediaUrl)
+      
+      // Get recording URL - try all possible locations
+      // Based on hamsa-client.ts: job.url is where the recording URL is stored
       const recordingUrl = 
-        callData.recordingUrl || 
-        callData.data?.recordingUrl || 
-        callData.url ||
-        callData.data?.url ||
-        callData.audioUrl || 
-        callData.data?.audioUrl || 
+        callData.url ||                    // Direct from job object
+        callData.data?.url ||              // Nested in data
+        callData.recordingUrl ||           // Alternative field name
+        callData.data?.recordingUrl ||     // Nested alternative
+        callData.mediaUrl ||               // Another alternative
+        callData.data?.mediaUrl ||         // Nested alternative
+        callData.audioUrl ||               // Another alternative
+        callData.data?.audioUrl ||         // Nested alternative
         ""
       
-      console.log("[v0] Recording URL:", recordingUrl)
+      console.log("[v0] Final Recording URL:", recordingUrl)
       
-      if (!recordingUrl) {
+      // If no URL found, try to fetch from jobs list as fallback
+      let finalRecordingUrl = recordingUrl
+      if (!finalRecordingUrl) {
+        console.log("[v0] No URL in job details, trying to fetch from jobs list...")
+        try {
+          const jobsResponse = await hamsa.getJobs(undefined, {
+            take: 100,
+            skip: 1,
+            status: "COMPLETED",
+            sort: { field: "createdAt", direction: "desc" },
+          })
+          const jobs = jobsResponse.data?.jobs || []
+          const matchingJob = jobs.find((job: any) => job.id === callId)
+          if (matchingJob?.url) {
+            finalRecordingUrl = matchingJob.url
+            console.log("[v0] Found URL from jobs list:", finalRecordingUrl)
+          } else {
+            console.log("[v0] Job not found in jobs list or has no URL")
+          }
+        } catch (jobsErr) {
+          console.error("[v0] Failed to fetch jobs list:", jobsErr)
+        }
+      }
+      
+      if (!finalRecordingUrl) {
         console.error("[v0] No recording URL available for transcription")
         return NextResponse.json(
           {
             error: "No transcript or recording available",
-            details: "The call has no transcript and no audio recording available for transcription.",
+            details: "The call has no transcript and no audio recording available for transcription. Call ID: " + callId,
           },
           { status: 400 },
         )
@@ -191,8 +230,8 @@ export async function POST(request: NextRequest) {
       }
       
       try {
-        console.log("[v0] Downloading audio from:", recordingUrl)
-        const audioResponse = await fetch(recordingUrl)
+        console.log("[v0] Downloading audio from:", finalRecordingUrl)
+        const audioResponse = await fetch(finalRecordingUrl)
         
         if (!audioResponse.ok) {
           throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`)
@@ -324,7 +363,7 @@ ${transcript}
    - الثقة في مزود الخدمة
 
 4. **مقاييس جودة الخدمة**:
-   - هل تم معالجة استفسار العميل بالكامل؟ (نعم/لا/جزئياً)
+   - هل تم معالجة استفسار العميل بالكامل�� (نعم/لا/جزئياً)
    - هل تم تقديم إرشادات الخدمة المناسبة؟
    - هل تم توضيح الخطوات التالية بوضوح؟
    - هل تم ترتيب المتابعة إذا لزم الأمر؟
