@@ -20,9 +20,15 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Hamsa call data fetched successfully")
       console.log("[v0] Call data keys:", Object.keys(callData))
       console.log("[v0] Full call data structure:", JSON.stringify(callData, null, 2).substring(0, 2000))
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Failed to fetch Hamsa call details:", error)
-      return NextResponse.json({ error: "Failed to fetch call details from Hamsa" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to fetch call details from Hamsa",
+          details: error?.message || String(error),
+        },
+        { status: 500 },
+      )
     }
 
     let phoneNumber = "غير متوفر"
@@ -145,29 +151,169 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Extracted transcript length:", transcript.length)
     console.log("[v0] Transcript preview:", transcript.substring(0, 500))
 
+    // If no transcript, try to transcribe from audio recording using OpenAI Whisper
     if (!transcript || transcript.length < 10) {
-      console.error("[v0] No valid transcript available")
-      console.error("[v0] Available fields:", Object.keys(callData.data || {}))
-      return NextResponse.json(
-        {
-          error: "No valid transcript available for this call",
-        },
-        { status: 400 },
-      )
+      console.log("[v0] No transcript found, attempting to transcribe from audio recording...")
+      
+      // Debug: Log the entire callData structure to find where URL is
+      console.log("[v0] Full callData for debugging:", JSON.stringify(callData, null, 2))
+      
+      // Debug: Log all available data to find the recording URL
+      console.log("[v0] Searching for recording URL in callData...")
+      console.log("[v0] callData.url:", callData.url)
+      console.log("[v0] callData.data?.url:", callData.data?.url)
+      console.log("[v0] callData.recordingUrl:", callData.recordingUrl)
+      console.log("[v0] callData.data?.recordingUrl:", callData.data?.recordingUrl)
+      console.log("[v0] callData.mediaUrl:", callData.mediaUrl)
+      console.log("[v0] callData.data?.mediaUrl:", callData.data?.mediaUrl)
+      
+      // Get recording URL - try all possible locations
+      // Based on hamsa-client.ts: job.url is where the recording URL is stored
+      const recordingUrl = 
+        callData.url ||                    // Direct from job object
+        callData.data?.url ||              // Nested in data
+        callData.recordingUrl ||           // Alternative field name
+        callData.data?.recordingUrl ||     // Nested alternative
+        callData.mediaUrl ||               // Another alternative
+        callData.data?.mediaUrl ||         // Nested alternative
+        callData.audioUrl ||               // Another alternative
+        callData.data?.audioUrl ||         // Nested alternative
+        ""
+      
+      console.log("[v0] Final Recording URL:", recordingUrl)
+      
+      // If no URL found, try to fetch from jobs list as fallback
+      let finalRecordingUrl = recordingUrl
+      if (!finalRecordingUrl) {
+        console.log("[v0] No URL in job details, trying to fetch from jobs list...")
+        try {
+          const jobsResponse = await hamsa.getJobs(undefined, {
+            take: 100,
+            skip: 1,
+            status: "COMPLETED",
+            sort: { field: "createdAt", direction: "desc" },
+          })
+          const jobs = jobsResponse.data?.jobs || []
+          const matchingJob = jobs.find((job: any) => job.id === callId)
+          if (matchingJob?.url) {
+            finalRecordingUrl = matchingJob.url
+            console.log("[v0] Found URL from jobs list:", finalRecordingUrl)
+          } else {
+            console.log("[v0] Job not found in jobs list or has no URL")
+          }
+        } catch (jobsErr) {
+          console.error("[v0] Failed to fetch jobs list:", jobsErr)
+        }
+      }
+      
+      if (!finalRecordingUrl) {
+        console.error("[v0] No recording URL available for transcription")
+        return NextResponse.json(
+          {
+            error: "No transcript or recording available",
+            details: "The call has no transcript and no audio recording available for transcription. Call ID: " + callId,
+          },
+          { status: 400 },
+        )
+      }
+      
+      const openaiApiKey = process.env.OPENAI_API_KEY
+      if (!openaiApiKey) {
+        console.error("[v0] OPENAI_API_KEY not set, cannot transcribe audio")
+        return NextResponse.json(
+          {
+            error: "Cannot transcribe audio",
+            details: "OPENAI_API_KEY is required for audio transcription but is not configured.",
+          },
+          { status: 500 },
+        )
+      }
+      
+      try {
+        console.log("[v0] Downloading audio from:", finalRecordingUrl)
+        const audioResponse = await fetch(finalRecordingUrl)
+        
+        if (!audioResponse.ok) {
+          throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`)
+        }
+        
+        const audioBuffer = await audioResponse.arrayBuffer()
+        const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" })
+        
+        console.log("[v0] Audio downloaded, size:", audioBlob.size, "bytes")
+        
+        // Create form data for Whisper API
+        const formData = new FormData()
+        formData.append("file", audioBlob, "recording.mp3")
+        formData.append("model", "whisper-1")
+        formData.append("language", "ar") // Arabic
+        formData.append("response_format", "verbose_json")
+        
+        console.log("[v0] Sending audio to OpenAI Whisper API...")
+        const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+          body: formData,
+        })
+        
+        if (!whisperResponse.ok) {
+          const errorText = await whisperResponse.text()
+          throw new Error(`Whisper API error: ${whisperResponse.status} - ${errorText.substring(0, 300)}`)
+        }
+        
+        const whisperData = await whisperResponse.json()
+        console.log("[v0] Whisper transcription received")
+        
+        // Format transcript with segments if available
+        if (whisperData.segments && Array.isArray(whisperData.segments)) {
+          transcript = whisperData.segments
+            .map((seg: any) => seg.text?.trim())
+            .filter((text: string) => text && text.length > 0)
+            .join("\n")
+        } else {
+          transcript = whisperData.text || ""
+        }
+        
+        console.log("[v0] Transcribed text length:", transcript.length)
+        console.log("[v0] Transcribed text preview:", transcript.substring(0, 500))
+        
+        if (!transcript || transcript.length < 10) {
+          return NextResponse.json(
+            {
+              error: "Transcription failed",
+              details: "The audio recording could not be transcribed. It may be too short or contain no speech.",
+            },
+            { status: 400 },
+          )
+        }
+        
+      } catch (whisperError: any) {
+        console.error("[v0] Whisper transcription failed:", whisperError)
+        return NextResponse.json(
+          {
+            error: "Audio transcription failed",
+            details: whisperError?.message || String(whisperError),
+          },
+          { status: 500 },
+        )
+      }
     }
 
-    console.log("[v0] Generating AI analysis with OpenAI...")
+    console.log("[v0] Generating AI analysis...")
     const openaiApiKey = process.env.OPENAI_API_KEY
+    const geminiApiKey = process.env.GEMINI_API_KEY
 
-    if (!openaiApiKey) {
-      console.error("[v0] OPENAI_API_KEY environment variable is not set")
+    if (!openaiApiKey && !geminiApiKey) {
+      console.error("[v0] No AI API key configured (OPENAI_API_KEY or GEMINI_API_KEY)")
       return NextResponse.json(
-        { error: "OpenAI API key is not configured. Please add OPENAI_API_KEY to environment variables." },
+        { error: "No AI API key is configured. Please add OPENAI_API_KEY or GEMINI_API_KEY to environment variables." },
         { status: 500 },
       )
     }
 
-    const analysisPrompt = `⚠️ مهم جداً: يجب أن تكون جميع المخرجات باللغة العربية فقط - ما عدا customerMood يجب أن يكون بالإنجليزية ⚠️
+    const analysisPrompt = `مهم جداً: يجب أن تكون جميع المخرجات باللغة العربية فقط - ما عدا customerMood يجب أن يكون بالإنجليزية
 
 قم بتحليل نص المكالمة هذا من مركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center):
 
@@ -217,7 +363,7 @@ ${transcript}
    - الثقة في مزود الخدمة
 
 4. **مقاييس جودة الخدمة**:
-   - هل تم معالجة استفسار العميل بالكامل؟ (نعم/لا/جزئياً)
+   - هل تم معالجة استفسار العميل بالكامل�� (نعم/لا/جزئياً)
    - هل تم تقديم إرشادات الخدمة المناسبة؟
    - هل تم توضيح الخطوات التالية بوضوح؟
    - هل تم ترتيب المتابعة إذا لزم الأمر؟
@@ -344,47 +490,123 @@ ${transcript}
   }
 }`
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              "أنت محلل متخصص في خدمة العملاء تقوم بتقييم تفاعلات العملاء وجودة الخدمة لمركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center). قدم تحليلاً شاملاً ومتعدد الأبعاد يغطي رضا العميل، جودة الخدمة، أداء الوكيل، وتعاون العميل. يجب أن تكون جميع الردود باللغة العربية وبتنسيق JSON مع رؤى تفصيلية.",
-          },
-          {
-            role: "user",
-            content: analysisPrompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 8192,
-        response_format: { type: "json_object" },
-      }),
-    })
+    const systemPrompt =
+      "أنت محلل متخصص في خدمة العملاء تقوم بتقييم تفاعلات العملاء وجودة الخدمة لمركز خدمة الفردان للسيارات (Al-Furdan Automotive Service Center). قدم تحليلاً شاملاً ومتعدد الأبعاد يغطي رضا العميل، جودة الخدمة، أداء الوكيل، وتعاون العميل. يجب أن تكون جميع الردود باللغة العربية وبتنسيق JSON مع رؤى تفصيلية."
 
-    if (!openaiResponse.ok) {
-      console.error("[v0] OpenAI API error:", openaiResponse.status)
-      const errorText = await openaiResponse.text()
-      console.error("[v0] Error details:", errorText)
-      return NextResponse.json({ error: "Failed to generate analysis" }, { status: openaiResponse.status })
+    let analysisText = ""
+    let aiProvider = ""
+    const aiErrors: string[] = []
+
+    // Try OpenAI first if available
+    if (openaiApiKey) {
+      try {
+        console.log("[v0] Trying OpenAI gpt-4o-mini...")
+        const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: analysisPrompt },
+            ],
+            temperature: 0.7,
+            max_tokens: 8192,
+            response_format: { type: "json_object" },
+          }),
+        })
+
+        if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text()
+          const errMsg = `OpenAI API error ${openaiResponse.status}: ${errorText.substring(0, 300)}`
+          console.error("[v0]", errMsg)
+          aiErrors.push(errMsg)
+        } else {
+          const openaiData = await openaiResponse.json()
+          analysisText = openaiData.choices?.[0]?.message?.content || ""
+          aiProvider = "OpenAI"
+          console.log("[v0] OpenAI response received, length:", analysisText.length)
+        }
+      } catch (err: any) {
+        const errMsg = `OpenAI request threw: ${err?.message || String(err)}`
+        console.error("[v0]", errMsg)
+        aiErrors.push(errMsg)
+      }
     }
 
-    const openaiData = await openaiResponse.json()
-    const analysisText = openaiData.choices?.[0]?.message?.content || ""
+    // Fallback to Gemini if OpenAI failed or wasn't configured
+    if (!analysisText && geminiApiKey) {
+      try {
+        console.log("[v0] Falling back to Gemini...")
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: `${systemPrompt}\n\n${analysisPrompt}` }],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 8192,
+                responseMimeType: "application/json",
+              },
+            }),
+          },
+        )
 
-    console.log("[v0] OpenAI response received, length:", analysisText.length)
+        if (!geminiResponse.ok) {
+          const errorText = await geminiResponse.text()
+          const errMsg = `Gemini API error ${geminiResponse.status}: ${errorText.substring(0, 300)}`
+          console.error("[v0]", errMsg)
+          aiErrors.push(errMsg)
+        } else {
+          const geminiData = await geminiResponse.json()
+          analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ""
+          aiProvider = "Gemini"
+          console.log("[v0] Gemini response received, length:", analysisText.length)
+        }
+      } catch (err: any) {
+        const errMsg = `Gemini request threw: ${err?.message || String(err)}`
+        console.error("[v0]", errMsg)
+        aiErrors.push(errMsg)
+      }
+    }
+
+    if (!analysisText) {
+      console.error("[v0] All AI providers failed:", aiErrors)
+      return NextResponse.json(
+        {
+          error: "AI analysis failed",
+          details: aiErrors.join(" | "),
+        },
+        { status: 502 },
+      )
+    }
+
+    console.log("[v0] AI provider used:", aiProvider)
     console.log("[v0] Response preview:", analysisText.substring(0, 500))
 
     let analysis
     try {
-      analysis = JSON.parse(analysisText)
+      // Strip code fences if any (Gemini sometimes wraps JSON in ```json ... ```)
+      let cleanText = analysisText.trim()
+      if (cleanText.startsWith("```")) {
+        cleanText = cleanText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim()
+      }
+      // If still not pure JSON, try to extract the first {...} block
+      if (!cleanText.startsWith("{")) {
+        const match = cleanText.match(/\{[\s\S]*\}/)
+        if (match) cleanText = match[0]
+      }
+      analysis = JSON.parse(cleanText)
       console.log("[v0] Analysis parsed successfully")
 
       // Handle both old format (customerAssessmentQuestions) and new format (detailedAssessmentQuestions)
@@ -402,7 +624,7 @@ ${transcript}
           {
             question: "التحقق من هوية العميل",
             answer: "تم التحقق من هوية العميل بشكل صحيح وفقاً للبروتوكولات",
-            status: "��متاز",
+            status: "ممتاز",
             details: "تم إكمال جميع خطوات التحقق المطلوبة"
           },
           {
@@ -536,8 +758,14 @@ ${transcript}
     console.log("[v0] Final report duration:", duration)
 
     return NextResponse.json(report)
-  } catch (error) {
+  } catch (error: any) {
     console.error("[v0] Error generating report:", error)
-    return NextResponse.json({ error: "Failed to generate report" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to generate report",
+        details: error?.message || String(error),
+      },
+      { status: 500 },
+    )
   }
 }

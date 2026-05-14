@@ -392,11 +392,26 @@ export default function CustomerRecordsPage() {
       } else {
         const errorText = await response.text()
         console.error("[v0] Failed to generate report:", errorText)
-        alert("Failed to generate report. Please try again.")
+        let userMessage = "Failed to generate report."
+        try {
+          const errorJson = JSON.parse(errorText)
+          if (errorJson?.error) {
+            userMessage = errorJson.error
+            if (errorJson.details) {
+              userMessage += `\n\n${errorJson.details}`
+            }
+          }
+        } catch {
+          // Not JSON - use raw text if short enough
+          if (errorText && errorText.length < 500) {
+            userMessage = `Failed to generate report: ${errorText}`
+          }
+        }
+        alert(userMessage)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Error generating report:", error)
-      alert("Error generating report. Please try again.")
+      alert(`Error generating report: ${error?.message || "Unknown error"}`)
     } finally {
       setGeneratingReportId(null)
     }
