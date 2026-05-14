@@ -151,17 +151,115 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Extracted transcript length:", transcript.length)
     console.log("[v0] Transcript preview:", transcript.substring(0, 500))
 
+    // If no transcript, try to transcribe from audio recording using OpenAI Whisper
     if (!transcript || transcript.length < 10) {
-      console.error("[v0] No valid transcript available")
-      console.error("[v0] Available fields:", Object.keys(callData.data || {}))
-      return NextResponse.json(
-        {
-          error: "No valid transcript available for this call",
-          details:
-            "The call may not have a transcript yet (still processing) or was too short. Please wait a moment after the call ends and try again.",
-        },
-        { status: 400 },
-      )
+      console.log("[v0] No transcript found, attempting to transcribe from audio recording...")
+      
+      // Get recording URL
+      const recordingUrl = 
+        callData.recordingUrl || 
+        callData.data?.recordingUrl || 
+        callData.url ||
+        callData.data?.url ||
+        callData.audioUrl || 
+        callData.data?.audioUrl || 
+        ""
+      
+      console.log("[v0] Recording URL:", recordingUrl)
+      
+      if (!recordingUrl) {
+        console.error("[v0] No recording URL available for transcription")
+        return NextResponse.json(
+          {
+            error: "No transcript or recording available",
+            details: "The call has no transcript and no audio recording available for transcription.",
+          },
+          { status: 400 },
+        )
+      }
+      
+      const openaiApiKey = process.env.OPENAI_API_KEY
+      if (!openaiApiKey) {
+        console.error("[v0] OPENAI_API_KEY not set, cannot transcribe audio")
+        return NextResponse.json(
+          {
+            error: "Cannot transcribe audio",
+            details: "OPENAI_API_KEY is required for audio transcription but is not configured.",
+          },
+          { status: 500 },
+        )
+      }
+      
+      try {
+        console.log("[v0] Downloading audio from:", recordingUrl)
+        const audioResponse = await fetch(recordingUrl)
+        
+        if (!audioResponse.ok) {
+          throw new Error(`Failed to download audio: ${audioResponse.status} ${audioResponse.statusText}`)
+        }
+        
+        const audioBuffer = await audioResponse.arrayBuffer()
+        const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" })
+        
+        console.log("[v0] Audio downloaded, size:", audioBlob.size, "bytes")
+        
+        // Create form data for Whisper API
+        const formData = new FormData()
+        formData.append("file", audioBlob, "recording.mp3")
+        formData.append("model", "whisper-1")
+        formData.append("language", "ar") // Arabic
+        formData.append("response_format", "verbose_json")
+        
+        console.log("[v0] Sending audio to OpenAI Whisper API...")
+        const whisperResponse = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+          body: formData,
+        })
+        
+        if (!whisperResponse.ok) {
+          const errorText = await whisperResponse.text()
+          throw new Error(`Whisper API error: ${whisperResponse.status} - ${errorText.substring(0, 300)}`)
+        }
+        
+        const whisperData = await whisperResponse.json()
+        console.log("[v0] Whisper transcription received")
+        
+        // Format transcript with segments if available
+        if (whisperData.segments && Array.isArray(whisperData.segments)) {
+          transcript = whisperData.segments
+            .map((seg: any) => seg.text?.trim())
+            .filter((text: string) => text && text.length > 0)
+            .join("\n")
+        } else {
+          transcript = whisperData.text || ""
+        }
+        
+        console.log("[v0] Transcribed text length:", transcript.length)
+        console.log("[v0] Transcribed text preview:", transcript.substring(0, 500))
+        
+        if (!transcript || transcript.length < 10) {
+          return NextResponse.json(
+            {
+              error: "Transcription failed",
+              details: "The audio recording could not be transcribed. It may be too short or contain no speech.",
+            },
+            { status: 400 },
+          )
+        }
+        
+      } catch (whisperError: any) {
+        console.error("[v0] Whisper transcription failed:", whisperError)
+        return NextResponse.json(
+          {
+            error: "Audio transcription failed",
+            details: whisperError?.message || String(whisperError),
+          },
+          { status: 500 },
+        )
+      }
     }
 
     console.log("[v0] Generating AI analysis...")
